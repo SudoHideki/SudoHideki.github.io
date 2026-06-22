@@ -129,7 +129,8 @@ button {
 .settings-row,
 .sound-row,
 .export-row,
-.stats {
+.stats,
+.import-box {
   width: min(640px, 100%);
 }
 
@@ -191,7 +192,8 @@ input[type="file"] {
 
 .settings-row button,
 .sound-row button,
-.export-row button {
+.export-row button,
+.import-actions button {
   min-height: 40px;
   padding: 0 14px;
   background: #1b78a8;
@@ -253,6 +255,46 @@ input[type="file"] {
   font-size: 1.3rem;
 }
 
+.import-box {
+  margin: 8px 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.import-box summary {
+  color: #dff7ff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.import-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.import-grid label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.import-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+#importStatus {
+  color: #76f0d2;
+  font-size: 0.9rem;
+}
+
 .export-row {
   display: flex;
   justify-content: center;
@@ -272,7 +314,8 @@ input[type="file"] {
     flex-direction: column;
   }
 
-  .stats {
+  .stats,
+  .import-grid {
     grid-template-columns: 1fr;
   }
 }

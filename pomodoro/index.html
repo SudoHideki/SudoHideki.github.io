@@ -65,6 +65,32 @@
         <button id="stopSoundButton" type="button">停止</button>
       </div>
 
+      <details class="import-box">
+        <summary>旧Python版データを読み込む</summary>
+        <div class="import-grid">
+          <label>
+            settings_custom.json
+            <input id="importSettingsFile" type="file" accept=".json,application/json">
+          </label>
+          <label>
+            task_names.json
+            <input id="importTaskNamesFile" type="file" accept=".json,application/json">
+          </label>
+          <label>
+            work_log.csv
+            <input id="importDailyFile" type="file" accept=".csv,text/csv">
+          </label>
+          <label>
+            work_detail_log.csv
+            <input id="importDetailFile" type="file" accept=".csv,text/csv">
+          </label>
+        </div>
+        <div class="import-actions">
+          <button id="importButton" type="button">選択したファイルを読み込む</button>
+          <span id="importStatus" role="status"></span>
+        </div>
+      </details>
+
       <div class="export-row">
         <button id="downloadDailyButton" type="button">日別CSV</button>
         <button id="downloadDetailButton" type="button">詳細CSV</button>

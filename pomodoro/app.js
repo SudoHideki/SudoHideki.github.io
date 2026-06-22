@@ -28,6 +28,12 @@ const elements = {
   soundFile: document.getElementById("soundFile"),
   testSoundButton: document.getElementById("testSoundButton"),
   stopSoundButton: document.getElementById("stopSoundButton"),
+  importSettingsFile: document.getElementById("importSettingsFile"),
+  importTaskNamesFile: document.getElementById("importTaskNamesFile"),
+  importDailyFile: document.getElementById("importDailyFile"),
+  importDetailFile: document.getElementById("importDetailFile"),
+  importButton: document.getElementById("importButton"),
+  importStatus: document.getElementById("importStatus"),
   downloadDailyButton: document.getElementById("downloadDailyButton"),
   downloadDetailButton: document.getElementById("downloadDetailButton")
 };
@@ -300,6 +306,201 @@ function setSoundFile(file) {
   audioElement = file ? new Audio(URL.createObjectURL(file)) : null;
 }
 
+function readFileText(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve("");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file, "utf-8");
+  });
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let field = "";
+  let row = [];
+  let quoted = false;
+
+  const pushField = () => {
+    row.push(field);
+    field = "";
+  };
+
+  const pushRow = () => {
+    if (row.length > 0 || field) {
+      pushField();
+      rows.push(row);
+      row = [];
+    }
+  };
+
+  const source = text.replace(/^\uFEFF/, "");
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    const next = source[index + 1];
+
+    if (quoted) {
+      if (char === '"' && next === '"') {
+        field += '"';
+        index += 1;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        field += char;
+      }
+    } else if (char === '"') {
+      quoted = true;
+    } else if (char === ",") {
+      pushField();
+    } else if (char === "\n") {
+      pushRow();
+    } else if (char !== "\r") {
+      field += char;
+    }
+  }
+
+  if (field || row.length) {
+    pushRow();
+  }
+
+  const headers = rows.shift() || [];
+  return rows
+    .filter((values) => values.some((value) => value.trim() !== ""))
+    .map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
+}
+
+function mergeTaskNames(names) {
+  const merged = [...names, ...saved.taskNames]
+    .map((name) => String(name || "").trim())
+    .filter(Boolean);
+  saved.taskNames = [...new Set(merged)].slice(0, 30);
+}
+
+function importSettingsJson(text) {
+  if (!text.trim()) {
+    return 0;
+  }
+
+  const data = JSON.parse(text);
+  if (Number.isFinite(Number(data.work_minutes)) && Number(data.work_minutes) > 0) {
+    saved.workMinutes = Number(data.work_minutes);
+  }
+  if (Number.isFinite(Number(data.break_minutes)) && Number(data.break_minutes) > 0) {
+    saved.breakMinutes = Number(data.break_minutes);
+  }
+  if (typeof data.last_task_name === "string") {
+    saved.lastTaskName = data.last_task_name.trim();
+    mergeTaskNames([saved.lastTaskName]);
+  }
+
+  return 1;
+}
+
+function importTaskNamesJson(text) {
+  if (!text.trim()) {
+    return 0;
+  }
+
+  const data = JSON.parse(text);
+  if (Array.isArray(data)) {
+    mergeTaskNames(data);
+    return data.length;
+  }
+  return 0;
+}
+
+function importDailyCsv(text) {
+  if (!text.trim()) {
+    return 0;
+  }
+
+  const rows = parseCsv(text);
+  rows.forEach((row) => {
+    const date = String(row.date || "").trim();
+    if (!date) {
+      return;
+    }
+
+    saved.dailyLogs[date] = {
+      date,
+      work_count: Number.parseInt(row.work_count || "0", 10) || 0,
+      total_seconds: Number.parseInt(row.total_seconds || "0", 10) || ((Number.parseInt(row.total_minutes || "0", 10) || 0) * 60),
+      updated_at: row.updated_at || ""
+    };
+  });
+  return rows.length;
+}
+
+function importDetailCsv(text) {
+  if (!text.trim()) {
+    return 0;
+  }
+
+  const rows = parseCsv(text);
+  const existingKeys = new Set(saved.detailLogs.map((row) => JSON.stringify(row)));
+  let added = 0;
+  rows.forEach((row) => {
+    const imported = {
+      date: row.date || "",
+      task_name: row.task_name || "",
+      start_time: row.start_time || "",
+      end_time: row.end_time || "",
+      work_minutes: Number.parseInt(row.work_minutes || "0", 10) || 0,
+      work_seconds: Number.parseInt(row.work_seconds || "0", 10) || 0
+    };
+    const key = JSON.stringify(imported);
+    if (!existingKeys.has(key)) {
+      saved.detailLogs.push(imported);
+      existingKeys.add(key);
+      added += 1;
+    }
+  });
+  mergeTaskNames(rows.map((row) => row.task_name));
+  return added;
+}
+
+async function importLegacyFiles() {
+  if (running) {
+    elements.importStatus.textContent = "タイマー停止中に読み込んでください。";
+    return;
+  }
+
+  try {
+    const settingsText = await readFileText(elements.importSettingsFile.files[0]);
+    const taskNamesText = await readFileText(elements.importTaskNamesFile.files[0]);
+    const dailyText = await readFileText(elements.importDailyFile.files[0]);
+    const detailText = await readFileText(elements.importDetailFile.files[0]);
+
+    const imported = {
+      settings: importSettingsJson(settingsText),
+      taskNames: importTaskNamesJson(taskNamesText),
+      daily: importDailyCsv(dailyText),
+      detail: importDetailCsv(detailText)
+    };
+
+    elements.workMinutes.value = saved.workMinutes;
+    elements.breakMinutes.value = saved.breakMinutes;
+    elements.taskInput.value = saved.lastTaskName;
+    mode = "work";
+    totalSeconds = saved.workMinutes * 60;
+    remainingSeconds = totalSeconds;
+    currentWorkStartTime = null;
+    updateTaskOptions();
+    updateDisplay();
+    saveState();
+
+    elements.importStatus.textContent = `読み込み完了: 設定${imported.settings}件、作業名${imported.taskNames}件、日別${imported.daily}件、詳細${imported.detail}件`;
+  } catch (error) {
+    elements.importStatus.textContent = "読み込みに失敗しました。ファイル形式を確認してください。";
+    console.error(error);
+  }
+}
+
 function csvEscape(value) {
   const text = String(value ?? "");
   return `"${text.replaceAll('"', '""')}"`;
@@ -355,6 +556,7 @@ function init() {
   elements.soundFile.addEventListener("change", (event) => setSoundFile(event.target.files[0]));
   elements.testSoundButton.addEventListener("click", playSound);
   elements.stopSoundButton.addEventListener("click", stopSound);
+  elements.importButton.addEventListener("click", importLegacyFiles);
   elements.downloadDailyButton.addEventListener("click", downloadDailyCsv);
   elements.downloadDetailButton.addEventListener("click", downloadDetailCsv);
 
