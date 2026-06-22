@@ -1,0 +1,366 @@
+const STORAGE_KEY = "sudohidekiPomodoroState";
+const DEFAULTS = {
+  workMinutes: 25,
+  breakMinutes: 5,
+  lastTaskName: "",
+  taskNames: [],
+  dailyLogs: {},
+  detailLogs: []
+};
+
+const elements = {
+  dateTime: document.getElementById("dateTime"),
+  modeLabel: document.getElementById("modeLabel"),
+  moonProgress: document.getElementById("moonProgress"),
+  moonCore: document.getElementById("moonCore"),
+  timeDisplay: document.getElementById("timeDisplay"),
+  taskInput: document.getElementById("taskInput"),
+  taskNames: document.getElementById("taskNames"),
+  workMinutes: document.getElementById("workMinutes"),
+  breakMinutes: document.getElementById("breakMinutes"),
+  applyButton: document.getElementById("applyButton"),
+  startButton: document.getElementById("startButton"),
+  pauseButton: document.getElementById("pauseButton"),
+  resetButton: document.getElementById("resetButton"),
+  workButton: document.getElementById("workButton"),
+  workCount: document.getElementById("workCount"),
+  totalMinutes: document.getElementById("totalMinutes"),
+  soundFile: document.getElementById("soundFile"),
+  testSoundButton: document.getElementById("testSoundButton"),
+  stopSoundButton: document.getElementById("stopSoundButton"),
+  downloadDailyButton: document.getElementById("downloadDailyButton"),
+  downloadDetailButton: document.getElementById("downloadDetailButton")
+};
+
+let saved = loadState();
+let mode = "work";
+let totalSeconds = saved.workMinutes * 60;
+let remainingSeconds = totalSeconds;
+let running = false;
+let lastTime = 0;
+let currentWorkStartTime = null;
+let animationCount = 0;
+let audioElement = null;
+let audioContext = null;
+
+function loadState() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    return { ...DEFAULTS, ...parsed };
+  } catch {
+    return { ...DEFAULTS };
+  }
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+}
+
+function todayKey(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+
+function formatDateTime(date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit"
+  }).format(date);
+}
+
+function formatTime(seconds) {
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+}
+
+function updateTaskOptions() {
+  elements.taskNames.innerHTML = "";
+  saved.taskNames.forEach((name) => {
+    const option = document.createElement("option");
+    option.value = name;
+    elements.taskNames.appendChild(option);
+  });
+}
+
+function rememberTaskName(taskName) {
+  const name = taskName.trim();
+  if (!name) {
+    return;
+  }
+
+  saved.taskNames = saved.taskNames.filter((item) => item !== name);
+  saved.taskNames.unshift(name);
+  saved.taskNames = saved.taskNames.slice(0, 30);
+  saved.lastTaskName = name;
+  updateTaskOptions();
+  saveState();
+}
+
+function currentDailyLog() {
+  const key = todayKey();
+  if (!saved.dailyLogs[key]) {
+    saved.dailyLogs[key] = {
+      date: key,
+      work_count: 0,
+      total_seconds: 0,
+      updated_at: ""
+    };
+  }
+  return saved.dailyLogs[key];
+}
+
+function recordWorkSession(workedSeconds) {
+  const end = new Date();
+  const start = currentWorkStartTime || end;
+  const taskName = elements.taskInput.value.trim();
+  rememberTaskName(taskName);
+
+  const daily = currentDailyLog();
+  daily.work_count += 1;
+  daily.total_seconds += workedSeconds;
+  daily.updated_at = end.toISOString().replace("T", " ").slice(0, 19);
+
+  saved.detailLogs.push({
+    date: todayKey(start),
+    task_name: taskName,
+    start_time: start.toISOString().replace("T", " ").slice(0, 19),
+    end_time: end.toISOString().replace("T", " ").slice(0, 19),
+    work_minutes: Math.floor(workedSeconds / 60),
+    work_seconds: workedSeconds
+  });
+
+  currentWorkStartTime = null;
+  saveState();
+}
+
+function updateDisplay() {
+  const percent = totalSeconds > 0 ? (totalSeconds - remainingSeconds) / totalSeconds : 0;
+  const degrees = Math.max(0, Math.min(360, percent * 360));
+  const phase = Math.round(percent * 130 - 65);
+  const daily = currentDailyLog();
+
+  elements.timeDisplay.textContent = formatTime(remainingSeconds);
+  elements.moonProgress.style.setProperty("--progress", `${degrees}deg`);
+  elements.moonCore.style.setProperty("--phase", `${phase}px`);
+  elements.moonProgress.classList.toggle("break", mode === "break");
+  elements.workCount.textContent = `${daily.work_count}回`;
+  elements.totalMinutes.textContent = `${Math.floor(daily.total_seconds / 60)}分`;
+}
+
+function updateModeLabel() {
+  const dots = ".".repeat(animationCount % 4);
+  elements.modeLabel.textContent = mode === "work" ? `作業中${dots}` : `休憩中${dots}`;
+  elements.modeLabel.style.color = mode === "work" ? "#e7fbff" : "#76f0d2";
+  animationCount += 1;
+}
+
+function applyMinutes() {
+  if (running) {
+    return;
+  }
+
+  const work = Number.parseInt(elements.workMinutes.value, 10);
+  const rest = Number.parseInt(elements.breakMinutes.value, 10);
+  if (!Number.isFinite(work) || !Number.isFinite(rest) || work <= 0 || rest <= 0) {
+    return;
+  }
+
+  saved.workMinutes = work;
+  saved.breakMinutes = rest;
+  rememberTaskName(elements.taskInput.value);
+  resetTimer();
+  saveState();
+}
+
+function startTimer() {
+  stopSound();
+  if (running) {
+    return;
+  }
+
+  if (mode === "work" && currentWorkStartTime === null) {
+    currentWorkStartTime = new Date();
+  }
+
+  rememberTaskName(elements.taskInput.value);
+  running = true;
+  lastTime = Date.now();
+}
+
+function pauseTimer() {
+  stopSound();
+  running = false;
+}
+
+function resetTimer() {
+  stopSound();
+
+  if (mode === "work") {
+    const workedSeconds = totalSeconds - remainingSeconds;
+    if (workedSeconds > 0) {
+      recordWorkSession(workedSeconds);
+    }
+  }
+
+  running = false;
+  totalSeconds = (mode === "work" ? saved.workMinutes : saved.breakMinutes) * 60;
+  remainingSeconds = totalSeconds;
+  currentWorkStartTime = null;
+  updateDisplay();
+}
+
+function resetToWork() {
+  stopSound();
+  running = false;
+  mode = "work";
+  totalSeconds = saved.workMinutes * 60;
+  remainingSeconds = totalSeconds;
+  currentWorkStartTime = null;
+  updateDisplay();
+}
+
+function switchMode() {
+  if (mode === "work") {
+    recordWorkSession(saved.workMinutes * 60);
+    mode = "break";
+    totalSeconds = saved.breakMinutes * 60;
+  } else {
+    mode = "work";
+    totalSeconds = saved.workMinutes * 60;
+  }
+
+  remainingSeconds = totalSeconds;
+  updateDisplay();
+}
+
+function tick() {
+  if (running) {
+    const now = Date.now();
+    const elapsed = Math.floor((now - lastTime) / 1000);
+    if (elapsed >= 1) {
+      remainingSeconds -= elapsed;
+      lastTime = now;
+
+      if (remainingSeconds <= 0) {
+        remainingSeconds = 0;
+        running = false;
+        updateDisplay();
+        playSound();
+        switchMode();
+      } else {
+        updateDisplay();
+      }
+    }
+  }
+
+  requestAnimationFrame(tick);
+}
+
+function playSound() {
+  if (audioElement) {
+    audioElement.currentTime = 0;
+    audioElement.play().catch(() => playBeep());
+    return;
+  }
+
+  playBeep();
+}
+
+function playBeep() {
+  audioContext = audioContext || new AudioContext();
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.value = 880;
+  gain.gain.setValueAtTime(0.001, audioContext.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.25, audioContext.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.7);
+  oscillator.connect(gain).connect(audioContext.destination);
+  oscillator.start();
+  oscillator.stop(audioContext.currentTime + 0.72);
+}
+
+function stopSound() {
+  if (audioElement) {
+    audioElement.pause();
+    audioElement.currentTime = 0;
+  }
+}
+
+function setSoundFile(file) {
+  stopSound();
+  if (audioElement) {
+    URL.revokeObjectURL(audioElement.src);
+  }
+
+  audioElement = file ? new Audio(URL.createObjectURL(file)) : null;
+}
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function downloadCsv(filename, headers, rows) {
+  const lines = [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(","))
+  ];
+  const blob = new Blob([`\uFEFF${lines.join("\n")}`], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function downloadDailyCsv() {
+  const headers = ["date", "work_count", "total_minutes", "total_seconds", "updated_at"];
+  const rows = Object.values(saved.dailyLogs)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((row) => ({
+      ...row,
+      total_minutes: Math.floor(row.total_seconds / 60)
+    }));
+  downloadCsv("work_log.csv", headers, rows);
+}
+
+function downloadDetailCsv() {
+  const headers = ["date", "task_name", "start_time", "end_time", "work_minutes", "work_seconds"];
+  downloadCsv("work_detail_log.csv", headers, saved.detailLogs);
+}
+
+function updateClock() {
+  elements.dateTime.textContent = formatDateTime(new Date());
+}
+
+function init() {
+  elements.workMinutes.value = saved.workMinutes;
+  elements.breakMinutes.value = saved.breakMinutes;
+  elements.taskInput.value = saved.lastTaskName;
+  updateTaskOptions();
+  updateDisplay();
+  updateClock();
+  updateModeLabel();
+
+  elements.applyButton.addEventListener("click", applyMinutes);
+  elements.startButton.addEventListener("click", startTimer);
+  elements.pauseButton.addEventListener("click", pauseTimer);
+  elements.resetButton.addEventListener("click", resetTimer);
+  elements.workButton.addEventListener("click", resetToWork);
+  elements.soundFile.addEventListener("change", (event) => setSoundFile(event.target.files[0]));
+  elements.testSoundButton.addEventListener("click", playSound);
+  elements.stopSoundButton.addEventListener("click", stopSound);
+  elements.downloadDailyButton.addEventListener("click", downloadDailyCsv);
+  elements.downloadDetailButton.addEventListener("click", downloadDetailCsv);
+
+  setInterval(updateClock, 1000);
+  setInterval(updateModeLabel, 500);
+  requestAnimationFrame(tick);
+}
+
+init();
