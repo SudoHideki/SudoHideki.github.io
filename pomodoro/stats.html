@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>作業グラフ | ポモドーロタイマー</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell stats-shell">
+    <header class="topbar">
+      <a href="index.html" class="back-link">タイマーへ戻る</a>
+      <time id="statsDateTime" class="date-time"></time>
+    </header>
+
+    <section class="timer-panel stats-panel" aria-label="作業グラフ">
+      <div class="stats-heading">
+        <p class="mode-label">作業グラフ</p>
+        <div class="summary-grid">
+          <div>
+            <span>記録日数</span>
+            <strong id="summaryDays">0日</strong>
+          </div>
+          <div>
+            <span>合計作業時間</span>
+            <strong id="summaryMinutes">0分</strong>
+          </div>
+          <div>
+            <span>合計作業回数</span>
+            <strong id="summaryCount">0回</strong>
+          </div>
+        </div>
+      </div>
+
+      <div id="emptyMessage" class="empty-message" hidden>
+        まだグラフにできる作業データがありません。
+      </div>
+
+      <section class="chart-section">
+        <h2>最近7日間の推移</h2>
+        <div id="recent7Chart" class="bar-chart"></div>
+      </section>
+
+      <section class="chart-section">
+        <h2>日別の作業時間</h2>
+        <div id="dailyMinutesChart" class="bar-chart"></div>
+      </section>
+
+      <section class="chart-section">
+        <h2>日別の作業回数</h2>
+        <div id="dailyCountChart" class="bar-chart"></div>
+      </section>
+
+      <section class="chart-section">
+        <h2>作業名ごとの合計時間</h2>
+        <div id="taskChart" class="bar-chart horizontal"></div>
+      </section>
+
+      <section class="chart-section">
+        <h2>週ごとの作業時間</h2>
+        <div id="weeklyChart" class="bar-chart"></div>
+      </section>
+
+      <section class="chart-section">
+        <h2>月ごとの作業時間</h2>
+        <div id="monthlyChart" class="bar-chart"></div>
+      </section>
+    </section>
+  </main>
+
+  <script src="stats.js"></script>
+</body>
+</html>
