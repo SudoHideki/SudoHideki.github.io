@@ -28,14 +28,10 @@ const elements = {
   soundFile: document.getElementById("soundFile"),
   testSoundButton: document.getElementById("testSoundButton"),
   stopSoundButton: document.getElementById("stopSoundButton"),
-  importSettingsFile: document.getElementById("importSettingsFile"),
-  importTaskNamesFile: document.getElementById("importTaskNamesFile"),
-  importDailyFile: document.getElementById("importDailyFile"),
-  importDetailFile: document.getElementById("importDetailFile"),
-  importButton: document.getElementById("importButton"),
-  importStatus: document.getElementById("importStatus"),
-  downloadDailyButton: document.getElementById("downloadDailyButton"),
-  downloadDetailButton: document.getElementById("downloadDetailButton")
+  importDataFile: document.getElementById("importDataFile"),
+  importDataButton: document.getElementById("importDataButton"),
+  exportDataButton: document.getElementById("exportDataButton"),
+  dataStatus: document.getElementById("dataStatus")
 };
 
 let saved = loadState();
@@ -104,6 +100,13 @@ function rememberTaskName(taskName) {
   saved.lastTaskName = name;
   updateTaskOptions();
   saveState();
+}
+
+function mergeTaskNames(names) {
+  const merged = [...names, ...saved.taskNames]
+    .map((name) => String(name || "").trim())
+    .filter(Boolean);
+  saved.taskNames = [...new Set(merged)].slice(0, 30);
 }
 
 function currentDailyLog() {
@@ -320,6 +323,11 @@ function readFileText(file) {
   });
 }
 
+function csvEscape(value) {
+  const text = String(value ?? "");
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
 function parseCsv(text) {
   const rows = [];
   let field = "";
@@ -374,138 +382,6 @@ function parseCsv(text) {
     .map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
 }
 
-function mergeTaskNames(names) {
-  const merged = [...names, ...saved.taskNames]
-    .map((name) => String(name || "").trim())
-    .filter(Boolean);
-  saved.taskNames = [...new Set(merged)].slice(0, 30);
-}
-
-function importSettingsJson(text) {
-  if (!text.trim()) {
-    return 0;
-  }
-
-  const data = JSON.parse(text);
-  if (Number.isFinite(Number(data.work_minutes)) && Number(data.work_minutes) > 0) {
-    saved.workMinutes = Number(data.work_minutes);
-  }
-  if (Number.isFinite(Number(data.break_minutes)) && Number(data.break_minutes) > 0) {
-    saved.breakMinutes = Number(data.break_minutes);
-  }
-  if (typeof data.last_task_name === "string") {
-    saved.lastTaskName = data.last_task_name.trim();
-    mergeTaskNames([saved.lastTaskName]);
-  }
-
-  return 1;
-}
-
-function importTaskNamesJson(text) {
-  if (!text.trim()) {
-    return 0;
-  }
-
-  const data = JSON.parse(text);
-  if (Array.isArray(data)) {
-    mergeTaskNames(data);
-    return data.length;
-  }
-  return 0;
-}
-
-function importDailyCsv(text) {
-  if (!text.trim()) {
-    return 0;
-  }
-
-  const rows = parseCsv(text);
-  rows.forEach((row) => {
-    const date = String(row.date || "").trim();
-    if (!date) {
-      return;
-    }
-
-    saved.dailyLogs[date] = {
-      date,
-      work_count: Number.parseInt(row.work_count || "0", 10) || 0,
-      total_seconds: Number.parseInt(row.total_seconds || "0", 10) || ((Number.parseInt(row.total_minutes || "0", 10) || 0) * 60),
-      updated_at: row.updated_at || ""
-    };
-  });
-  return rows.length;
-}
-
-function importDetailCsv(text) {
-  if (!text.trim()) {
-    return 0;
-  }
-
-  const rows = parseCsv(text);
-  const existingKeys = new Set(saved.detailLogs.map((row) => JSON.stringify(row)));
-  let added = 0;
-  rows.forEach((row) => {
-    const imported = {
-      date: row.date || "",
-      task_name: row.task_name || "",
-      start_time: row.start_time || "",
-      end_time: row.end_time || "",
-      work_minutes: Number.parseInt(row.work_minutes || "0", 10) || 0,
-      work_seconds: Number.parseInt(row.work_seconds || "0", 10) || 0
-    };
-    const key = JSON.stringify(imported);
-    if (!existingKeys.has(key)) {
-      saved.detailLogs.push(imported);
-      existingKeys.add(key);
-      added += 1;
-    }
-  });
-  mergeTaskNames(rows.map((row) => row.task_name));
-  return added;
-}
-
-async function importLegacyFiles() {
-  if (running) {
-    elements.importStatus.textContent = "タイマー停止中に読み込んでください。";
-    return;
-  }
-
-  try {
-    const settingsText = await readFileText(elements.importSettingsFile.files[0]);
-    const taskNamesText = await readFileText(elements.importTaskNamesFile.files[0]);
-    const dailyText = await readFileText(elements.importDailyFile.files[0]);
-    const detailText = await readFileText(elements.importDetailFile.files[0]);
-
-    const imported = {
-      settings: importSettingsJson(settingsText),
-      taskNames: importTaskNamesJson(taskNamesText),
-      daily: importDailyCsv(dailyText),
-      detail: importDetailCsv(detailText)
-    };
-
-    elements.workMinutes.value = saved.workMinutes;
-    elements.breakMinutes.value = saved.breakMinutes;
-    elements.taskInput.value = saved.lastTaskName;
-    mode = "work";
-    totalSeconds = saved.workMinutes * 60;
-    remainingSeconds = totalSeconds;
-    currentWorkStartTime = null;
-    updateTaskOptions();
-    updateDisplay();
-    saveState();
-
-    elements.importStatus.textContent = `読み込み完了: 設定${imported.settings}件、作業名${imported.taskNames}件、日別${imported.daily}件、詳細${imported.detail}件`;
-  } catch (error) {
-    elements.importStatus.textContent = "読み込みに失敗しました。ファイル形式を確認してください。";
-    console.error(error);
-  }
-}
-
-function csvEscape(value) {
-  const text = String(value ?? "");
-  return `"${text.replaceAll('"', '""')}"`;
-}
-
 function downloadCsv(filename, headers, rows) {
   const lines = [
     headers.join(","),
@@ -519,20 +395,152 @@ function downloadCsv(filename, headers, rows) {
   URL.revokeObjectURL(link.href);
 }
 
-function downloadDailyCsv() {
-  const headers = ["date", "work_count", "total_minutes", "total_seconds", "updated_at"];
-  const rows = Object.values(saved.dailyLogs)
+function buildDataRows() {
+  const rows = [
+    { record_type: "setting", key: "work_minutes", value: saved.workMinutes },
+    { record_type: "setting", key: "break_minutes", value: saved.breakMinutes },
+    { record_type: "setting", key: "last_task_name", value: saved.lastTaskName }
+  ];
+
+  saved.taskNames.forEach((name) => {
+    rows.push({ record_type: "task_name", key: name, value: name });
+  });
+
+  Object.values(saved.dailyLogs)
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map((row) => ({
-      ...row,
-      total_minutes: Math.floor(row.total_seconds / 60)
-    }));
-  downloadCsv("work_log.csv", headers, rows);
+    .forEach((log) => {
+      rows.push({
+        record_type: "daily",
+        date: log.date,
+        work_count: log.work_count,
+        total_minutes: Math.floor(log.total_seconds / 60),
+        total_seconds: log.total_seconds,
+        updated_at: log.updated_at
+      });
+    });
+
+  saved.detailLogs.forEach((log) => {
+    rows.push({
+      record_type: "detail",
+      date: log.date,
+      task_name: log.task_name,
+      start_time: log.start_time,
+      end_time: log.end_time,
+      work_minutes: log.work_minutes,
+      work_seconds: log.work_seconds
+    });
+  });
+
+  return rows;
 }
 
-function downloadDetailCsv() {
-  const headers = ["date", "task_name", "start_time", "end_time", "work_minutes", "work_seconds"];
-  downloadCsv("work_detail_log.csv", headers, saved.detailLogs);
+function exportDataCsv() {
+  const headers = [
+    "record_type",
+    "key",
+    "value",
+    "date",
+    "task_name",
+    "start_time",
+    "end_time",
+    "work_count",
+    "total_minutes",
+    "total_seconds",
+    "work_minutes",
+    "work_seconds",
+    "updated_at"
+  ];
+  downloadCsv("pomodoro_data.csv", headers, buildDataRows());
+  elements.dataStatus.textContent = "書き出しました。";
+}
+
+function importDataRows(rows) {
+  const detailKeys = new Set(saved.detailLogs.map((row) => JSON.stringify(row)));
+  let counts = { settings: 0, taskNames: 0, daily: 0, detail: 0 };
+
+  rows.forEach((row) => {
+    const type = String(row.record_type || "").trim();
+
+    if (type === "setting") {
+      if (row.key === "work_minutes" && Number(row.value) > 0) {
+        saved.workMinutes = Number(row.value);
+        counts.settings += 1;
+      } else if (row.key === "break_minutes" && Number(row.value) > 0) {
+        saved.breakMinutes = Number(row.value);
+        counts.settings += 1;
+      } else if (row.key === "last_task_name") {
+        saved.lastTaskName = String(row.value || "").trim();
+        mergeTaskNames([saved.lastTaskName]);
+        counts.settings += 1;
+      }
+    } else if (type === "task_name") {
+      mergeTaskNames([row.value || row.key]);
+      counts.taskNames += 1;
+    } else if (type === "daily") {
+      const date = String(row.date || "").trim();
+      if (date) {
+        saved.dailyLogs[date] = {
+          date,
+          work_count: Number.parseInt(row.work_count || "0", 10) || 0,
+          total_seconds: Number.parseInt(row.total_seconds || "0", 10) || ((Number.parseInt(row.total_minutes || "0", 10) || 0) * 60),
+          updated_at: row.updated_at || ""
+        };
+        counts.daily += 1;
+      }
+    } else if (type === "detail") {
+      const imported = {
+        date: row.date || "",
+        task_name: row.task_name || "",
+        start_time: row.start_time || "",
+        end_time: row.end_time || "",
+        work_minutes: Number.parseInt(row.work_minutes || "0", 10) || 0,
+        work_seconds: Number.parseInt(row.work_seconds || "0", 10) || 0
+      };
+      const key = JSON.stringify(imported);
+      if (!detailKeys.has(key)) {
+        saved.detailLogs.push(imported);
+        detailKeys.add(key);
+        counts.detail += 1;
+      }
+      mergeTaskNames([imported.task_name]);
+    }
+  });
+
+  return counts;
+}
+
+async function importDataCsv() {
+  if (running) {
+    elements.dataStatus.textContent = "タイマー停止中に読み込んでください。";
+    return;
+  }
+
+  const file = elements.importDataFile.files[0];
+  if (!file) {
+    elements.dataStatus.textContent = "CSVファイルを選んでください。";
+    return;
+  }
+
+  try {
+    const text = await readFileText(file);
+    const counts = importDataRows(parseCsv(text));
+
+    elements.workMinutes.value = saved.workMinutes;
+    elements.breakMinutes.value = saved.breakMinutes;
+    elements.taskInput.value = saved.lastTaskName;
+    mode = "work";
+    totalSeconds = saved.workMinutes * 60;
+    remainingSeconds = totalSeconds;
+    currentWorkStartTime = null;
+    updateTaskOptions();
+    updateDisplay();
+    saveState();
+
+    elements.dataStatus.textContent = `読み込み完了: 設定${counts.settings}件、作業名${counts.taskNames}件、日別${counts.daily}件、詳細${counts.detail}件`;
+  } catch (error) {
+    elements.dataStatus.textContent = "読み込みに失敗しました。CSVファイルを確認してください。";
+    console.error(error);
+  }
 }
 
 function updateClock() {
@@ -556,9 +564,8 @@ function init() {
   elements.soundFile.addEventListener("change", (event) => setSoundFile(event.target.files[0]));
   elements.testSoundButton.addEventListener("click", playSound);
   elements.stopSoundButton.addEventListener("click", stopSound);
-  elements.importButton.addEventListener("click", importLegacyFiles);
-  elements.downloadDailyButton.addEventListener("click", downloadDailyCsv);
-  elements.downloadDetailButton.addEventListener("click", downloadDetailCsv);
+  elements.importDataButton.addEventListener("click", importDataCsv);
+  elements.exportDataButton.addEventListener("click", exportDataCsv);
 
   setInterval(updateClock, 1000);
   setInterval(updateModeLabel, 500);
