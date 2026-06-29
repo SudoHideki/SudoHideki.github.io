@@ -151,7 +151,7 @@ function clearElement(element) {
   }
 }
 
-function renderBarChart(element, rows, options) {
+function renderVerticalBarChart(element, rows, options) {
   clearElement(element);
   const maxValue = Math.max.apply(null, rows.map((row) => row.value).concat([1]));
 
@@ -163,6 +163,47 @@ function renderBarChart(element, rows, options) {
     return;
   }
 
+  element.className = "bar-chart vertical-chart";
+  rows.forEach((row) => {
+    const item = document.createElement("div");
+    item.className = "vertical-item";
+
+    const value = document.createElement("span");
+    value.className = "vertical-value";
+    value.textContent = options.formatValue(row.value);
+
+    const track = document.createElement("div");
+    track.className = "vertical-track";
+
+    const bar = document.createElement("div");
+    bar.className = "vertical-bar";
+    bar.style.height = `${Math.max(row.value > 0 ? 8 : 0, (row.value / maxValue) * 100)}%`;
+
+    const label = document.createElement("span");
+    label.className = "vertical-label";
+    label.textContent = row.label;
+
+    item.appendChild(value);
+    track.appendChild(bar);
+    item.appendChild(track);
+    item.appendChild(label);
+    element.appendChild(item);
+  });
+}
+
+function renderHorizontalBarChart(element, rows, options) {
+  clearElement(element);
+  const maxValue = Math.max.apply(null, rows.map((row) => row.value).concat([1]));
+
+  if (!rows.length) {
+    const empty = document.createElement("p");
+    empty.className = "chart-empty";
+    empty.textContent = "データがありません。";
+    element.appendChild(empty);
+    return;
+  }
+
+  element.className = "bar-chart horizontal-chart";
   rows.forEach((row) => {
     const item = document.createElement("div");
     item.className = "chart-row";
@@ -176,7 +217,7 @@ function renderBarChart(element, rows, options) {
 
     const bar = document.createElement("span");
     bar.className = "chart-bar";
-    bar.style.width = `${Math.max(4, (row.value / maxValue) * 100)}%`;
+    bar.style.width = `${Math.max(5, (row.value / maxValue) * 100)}%`;
 
     const value = document.createElement("span");
     value.className = "chart-value";
@@ -215,39 +256,39 @@ function init() {
     value: dailyMap[date] ? dailyMap[date].minutes : 0
   }));
 
-  renderBarChart(elements.recent7Chart, recentRows, {
+  renderVerticalBarChart(elements.recent7Chart, recentRows, {
     formatValue: minutesLabel
   });
 
-  renderBarChart(elements.dailyMinutesChart, dailyRows.slice(-30).map((row) => ({
+  renderVerticalBarChart(elements.dailyMinutesChart, dailyRows.slice(-14).map((row) => ({
     label: shortDate(row.date),
     value: row.minutes
   })), {
     formatValue: minutesLabel
   });
 
-  renderBarChart(elements.dailyCountChart, dailyRows.slice(-30).map((row) => ({
+  renderVerticalBarChart(elements.dailyCountChart, dailyRows.slice(-14).map((row) => ({
     label: shortDate(row.date),
     value: row.count
   })), {
     formatValue: (value) => `${value}回`
   });
 
-  renderBarChart(elements.taskChart, getTaskRows(state).map((row) => ({
+  renderHorizontalBarChart(elements.taskChart, getTaskRows(state).map((row) => ({
     label: row.label,
     value: row.minutes
   })), {
     formatValue: minutesLabel
   });
 
-  renderBarChart(elements.weeklyChart, getWeeklyRows(dailyRows).slice(-16).map((row) => ({
+  renderVerticalBarChart(elements.weeklyChart, getWeeklyRows(dailyRows).slice(-12).map((row) => ({
     label: row.label,
     value: row.minutes
   })), {
     formatValue: minutesLabel
   });
 
-  renderBarChart(elements.monthlyChart, getMonthlyRows(dailyRows).slice(-12).map((row) => ({
+  renderVerticalBarChart(elements.monthlyChart, getMonthlyRows(dailyRows).slice(-12).map((row) => ({
     label: row.label,
     value: row.minutes
   })), {
