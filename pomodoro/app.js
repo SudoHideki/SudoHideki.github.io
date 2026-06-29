@@ -48,9 +48,9 @@ let audioContext = null;
 function loadState() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return { ...DEFAULTS, ...parsed };
+    return Object.assign({}, DEFAULTS, parsed || {});
   } catch {
-    return { ...DEFAULTS };
+    return Object.assign({}, DEFAULTS);
   }
 }
 
@@ -103,10 +103,16 @@ function rememberTaskName(taskName) {
 }
 
 function mergeTaskNames(names) {
-  const merged = [...names, ...saved.taskNames]
+  const merged = names.concat(saved.taskNames)
     .map((name) => String(name || "").trim())
     .filter(Boolean);
-  saved.taskNames = [...new Set(merged)].slice(0, 30);
+  const uniqueNames = [];
+  merged.forEach((name) => {
+    if (!uniqueNames.includes(name)) {
+      uniqueNames.push(name);
+    }
+  });
+  saved.taskNames = uniqueNames.slice(0, 30);
 }
 
 function currentDailyLog() {
@@ -265,8 +271,6 @@ function tick() {
       }
     }
   }
-
-  requestAnimationFrame(tick);
 }
 
 function playSound() {
@@ -280,7 +284,12 @@ function playSound() {
 }
 
 function playBeep() {
-  audioContext = audioContext || new AudioContext();
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) {
+    return;
+  }
+
+  audioContext = audioContext || new AudioContextClass();
   const oscillator = audioContext.createOscillator();
   const gain = audioContext.createGain();
   oscillator.type = "sine";
@@ -324,8 +333,8 @@ function readFileText(file) {
 }
 
 function csvEscape(value) {
-  const text = String(value ?? "");
-  return `"${text.replaceAll('"', '""')}"`;
+  const text = String(value === null || value === undefined ? "" : value);
+  return `"${text.replace(/"/g, '""')}"`;
 }
 
 function parseCsv(text) {
@@ -379,14 +388,22 @@ function parseCsv(text) {
   const headers = rows.shift() || [];
   return rows
     .filter((values) => values.some((value) => value.trim() !== ""))
-    .map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
+    .map((values) => {
+      const record = {};
+      headers.forEach((header, index) => {
+        record[header] = values[index] || "";
+      });
+      return record;
+    });
 }
 
 function downloadCsv(filename, headers, rows) {
   const lines = [
-    headers.join(","),
-    ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(","))
+    headers.join(",")
   ];
+  rows.forEach((row) => {
+    lines.push(headers.map((header) => csvEscape(row[header])).join(","));
+  });
   const blob = new Blob([`\uFEFF${lines.join("\n")}`], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -569,7 +586,7 @@ function init() {
 
   setInterval(updateClock, 1000);
   setInterval(updateModeLabel, 500);
-  requestAnimationFrame(tick);
+  setInterval(tick, 200);
 }
 
 init();
