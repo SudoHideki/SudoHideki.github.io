@@ -193,6 +193,7 @@ input[type="file"] {
 .settings-row button,
 .sound-row button,
 .export-row button,
+.data-row button,
 .import-actions button {
   min-height: 40px;
   padding: 0 14px;
@@ -262,6 +263,18 @@ input[type="file"] {
   background: var(--panel-2);
 }
 
+.data-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.data-row label {
+  color: #dff7ff;
+  font-weight: 700;
+}
+
 .import-box summary {
   color: #dff7ff;
   cursor: pointer;
@@ -309,7 +322,8 @@ input[type="file"] {
 
   .topbar,
   .task-row,
-  .sound-row {
+  .sound-row,
+  .data-row {
     align-items: stretch;
     flex-direction: column;
   }
