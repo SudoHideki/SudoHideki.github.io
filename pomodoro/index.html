@@ -216,7 +216,7 @@
     <div class="row panel">
       <span id="soundLabel">音声：標準ベル</span>
       <button id="soundButton" type="button">♪</button>
-      <input id="soundFileInput" class="hidden" type="file" accept="audio/*">
+      <input id="soundFileInput" class="hidden" type="file">
     </div>
 
     <div id="modeLabel" class="mode">作業中</div>
@@ -666,12 +666,12 @@
         detail.end_time,
         detail.work_minutes,
         detail.work_seconds
-      ].join("\\u0001");
+      ].join("\u0001");
     }
 
     function exportData() {
       const csv = makeUnifiedCsv();
-      const blob = new Blob(["\\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -737,7 +737,7 @@
       return [
         FIELDNAMES.join(","),
         ...rows.map((row) => FIELDNAMES.map((field) => csvCell(row[field] ?? "")).join(","))
-      ].join("\\r\\n");
+      ].join("\r\n");
     }
 
     function csvCell(value) {
@@ -766,8 +766,8 @@
         } else if (char === "," && !quoted) {
           row.push(cell);
           cell = "";
-        } else if ((char === "\\n" || char === "\\r") && !quoted) {
-          if (char === "\\r" && next === "\\n") i += 1;
+        } else if ((char === "\n" || char === "\r") && !quoted) {
+          if (char === "\r" && next === "\n") i += 1;
           row.push(cell);
           if (row.some((value) => value !== "")) rows.push(row);
           row = [];
@@ -781,7 +781,7 @@
       if (row.some((value) => value !== "")) rows.push(row);
       if (rows.length === 0) return [];
 
-      const headers = rows.shift().map((header) => header.replace(/^\\ufeff/, ""));
+      const headers = rows.shift().map((header) => header.replace(/^\ufeff/, ""));
       return rows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
     }
 
