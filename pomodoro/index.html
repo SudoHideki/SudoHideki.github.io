@@ -192,6 +192,113 @@
       margin-top: 8px;
     }
 
+    .charts {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .chart-card {
+      background: rgba(16, 45, 86, 0.92);
+      border: 1px solid rgba(91, 199, 255, 0.28);
+      border-radius: 18px;
+      padding: 14px;
+      min-width: 0;
+    }
+
+    .chart-card.wide {
+      grid-column: 1 / -1;
+    }
+
+    .chart-title {
+      margin: 0 0 10px;
+      color: #dff7ff;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .bar-chart {
+      display: grid;
+      gap: 9px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: minmax(84px, 130px) 1fr auto;
+      gap: 8px;
+      align-items: center;
+      color: #eefbff;
+      font-size: 12px;
+    }
+
+    .bar-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bar-track {
+      height: 14px;
+      border-radius: 999px;
+      background: rgba(6, 21, 45, 0.88);
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      min-width: 2px;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #1fc7a1, #5bc7ff);
+    }
+
+    .bar-value {
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .pie-layout {
+      display: grid;
+      grid-template-columns: 170px 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .pie-chart {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: #1b78a8;
+      box-shadow: inset 0 0 0 16px rgba(6, 21, 45, 0.42), 0 0 24px rgba(91, 199, 255, 0.18);
+    }
+
+    .legend {
+      display: grid;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .legend-item {
+      display: grid;
+      grid-template-columns: 12px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      color: #eefbff;
+      min-width: 0;
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+    }
+
+    .empty-chart {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 8px 0;
+    }
+
     .hidden {
       display: none;
     }
@@ -207,6 +314,19 @@
 
       button {
         min-width: 76px;
+      }
+
+      .charts {
+        grid-template-columns: 1fr;
+      }
+
+      .pie-layout {
+        grid-template-columns: 1fr;
+        justify-items: center;
+      }
+
+      .bar-row {
+        grid-template-columns: minmax(72px, 100px) 1fr auto;
       }
     }
   </style>
@@ -258,9 +378,8 @@
 
     <div class="row panel">
       <span id="dataFileLabel">データ：未選択</span>
-      <button id="chooseDataButton" type="button">データを選択</button>
-      <button id="importDataButton" class="start" type="button">読み込み</button>
-      <button id="exportDataButton" class="export" type="button">出力</button>
+      <button id="importDataButton" class="start" type="button">データ読込</button>
+      <button id="exportDataButton" class="export" type="button">データ出力</button>
       <input id="dataFileInput" class="hidden" type="file" accept=".csv,text/csv">
     </div>
 
@@ -274,6 +393,31 @@
       <span id="countLabel">作業回数：0回</span>
       <span id="totalLabel">今日の作業時間：0分</span>
     </div>
+
+    <section class="charts" aria-label="作業記録グラフ">
+      <div class="chart-card wide">
+        <h2 class="chart-title">日別の作業時間</h2>
+        <div id="dailyTimeChart" class="bar-chart"></div>
+      </div>
+
+      <div class="chart-card">
+        <h2 class="chart-title">日別の作業回数</h2>
+        <div id="dailyCountChart" class="bar-chart"></div>
+      </div>
+
+      <div class="chart-card">
+        <h2 class="chart-title">作業名ごとの合計時間</h2>
+        <div class="pie-layout">
+          <div id="taskPieChart" class="pie-chart"></div>
+          <div id="taskPieLegend" class="legend"></div>
+        </div>
+      </div>
+
+      <div class="chart-card wide">
+        <h2 class="chart-title">作業名ごとの合計時間</h2>
+        <div id="taskBarChart" class="bar-chart"></div>
+      </div>
+    </section>
 
     <div id="dateTimeLabel" class="datetime"></div>
     <div id="statusLabel" class="status"></div>
@@ -323,7 +467,6 @@
       breakMinutes: document.getElementById("breakMinutes"),
       applyButton: document.getElementById("applyButton"),
       dataFileLabel: document.getElementById("dataFileLabel"),
-      chooseDataButton: document.getElementById("chooseDataButton"),
       importDataButton: document.getElementById("importDataButton"),
       exportDataButton: document.getElementById("exportDataButton"),
       dataFileInput: document.getElementById("dataFileInput"),
@@ -332,6 +475,11 @@
       resetButton: document.getElementById("resetButton"),
       countLabel: document.getElementById("countLabel"),
       totalLabel: document.getElementById("totalLabel"),
+      dailyTimeChart: document.getElementById("dailyTimeChart"),
+      dailyCountChart: document.getElementById("dailyCountChart"),
+      taskPieChart: document.getElementById("taskPieChart"),
+      taskPieLegend: document.getElementById("taskPieLegend"),
+      taskBarChart: document.getElementById("taskBarChart"),
       dateTimeLabel: document.getElementById("dateTimeLabel"),
       statusLabel: document.getElementById("statusLabel")
     };
@@ -548,6 +696,7 @@
       currentWorkStartTime = null;
       saveState();
       updateDisplay();
+      renderCharts();
     }
 
     function handleSoundButton() {
@@ -575,6 +724,7 @@
     }
 
     function chooseDataFile() {
+      els.dataFileInput.value = "";
       els.dataFileInput.click();
     }
 
@@ -656,6 +806,7 @@
 
       hydrateControls();
       saveState();
+      renderCharts();
     }
 
     function detailKey(detail) {
@@ -793,6 +944,138 @@
       els.dateTimeLabel.textContent = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日　${ampm}${hour}時${pad(now.getMinutes())}分`;
     }
 
+    function renderCharts() {
+      renderDailyTimeChart();
+      renderDailyCountChart();
+      renderTaskCharts();
+    }
+
+    function renderDailyTimeChart() {
+      const rows = Object.values(state.daily)
+        .filter((row) => row.date)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(-14)
+        .map((row) => ({
+          label: row.date.slice(5),
+          value: Math.round(Number(row.total_seconds || 0) / 60)
+        }));
+
+      renderBarChart(els.dailyTimeChart, rows, "分");
+    }
+
+    function renderDailyCountChart() {
+      const rows = Object.values(state.daily)
+        .filter((row) => row.date)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(-14)
+        .map((row) => ({
+          label: row.date.slice(5),
+          value: Number(row.work_count || 0)
+        }));
+
+      renderBarChart(els.dailyCountChart, rows, "回");
+    }
+
+    function renderTaskCharts() {
+      const taskTotals = new Map();
+
+      for (const detail of state.details) {
+        const name = (detail.task_name || "名称なし").trim() || "名称なし";
+        const seconds = Number(detail.work_seconds || 0);
+        taskTotals.set(name, (taskTotals.get(name) || 0) + seconds);
+      }
+
+      const rows = [...taskTotals.entries()]
+        .map(([label, seconds]) => ({
+          label,
+          seconds,
+          value: Math.round(seconds / 60)
+        }))
+        .filter((row) => row.seconds > 0)
+        .sort((a, b) => b.seconds - a.seconds);
+
+      renderBarChart(els.taskBarChart, rows, "分");
+      renderPieChart(rows);
+    }
+
+    function renderBarChart(container, rows, unit) {
+      container.innerHTML = "";
+
+      if (!rows.length) {
+        container.innerHTML = '<div class="empty-chart">まだ表示できる作業記録がありません</div>';
+        return;
+      }
+
+      const max = Math.max(...rows.map((row) => row.value), 1);
+      for (const row of rows) {
+        const barRow = document.createElement("div");
+        barRow.className = "bar-row";
+
+        const label = document.createElement("div");
+        label.className = "bar-label";
+        label.title = row.label;
+        label.textContent = row.label;
+
+        const track = document.createElement("div");
+        track.className = "bar-track";
+
+        const fill = document.createElement("div");
+        fill.className = "bar-fill";
+        fill.style.width = `${Math.max(3, (row.value / max) * 100)}%`;
+        track.appendChild(fill);
+
+        const value = document.createElement("div");
+        value.className = "bar-value";
+        value.textContent = `${row.value}${unit}`;
+
+        barRow.append(label, track, value);
+        container.appendChild(barRow);
+      }
+    }
+
+    function renderPieChart(rows) {
+      const colors = ["#1fc7a1", "#5bc7ff", "#8c7ae6", "#ffcf5a", "#ff7aa8", "#76f0d2", "#b0a4ff"];
+      els.taskPieLegend.innerHTML = "";
+
+      if (!rows.length) {
+        els.taskPieChart.style.background = "#1b78a8";
+        els.taskPieLegend.innerHTML = '<div class="empty-chart">まだ表示できる作業記録がありません</div>';
+        return;
+      }
+
+      const total = rows.reduce((sum, row) => sum + row.seconds, 0);
+      let start = 0;
+      const segments = rows.map((row, index) => {
+        const end = start + (row.seconds / total) * 100;
+        const segment = `${colors[index % colors.length]} ${start}% ${end}%`;
+        start = end;
+        return segment;
+      });
+
+      els.taskPieChart.style.background = `conic-gradient(${segments.join(", ")})`;
+
+      rows.slice(0, 7).forEach((row, index) => {
+        const item = document.createElement("div");
+        item.className = "legend-item";
+
+        const swatch = document.createElement("span");
+        swatch.className = "swatch";
+        swatch.style.backgroundColor = colors[index % colors.length];
+
+        const label = document.createElement("span");
+        label.className = "bar-label";
+        label.title = row.label;
+        label.textContent = row.label;
+
+        const value = document.createElement("span");
+        value.className = "bar-value";
+        value.textContent = `${row.value}分`;
+
+        item.append(swatch, label, value);
+        els.taskPieLegend.appendChild(item);
+      });
+    }
+
     function animateMode() {
       const dots = ".".repeat(animationCount % 4);
       els.modeLabel.textContent = `${mode === "work" ? "作業中" : "休憩中"}${dots}`;
@@ -810,6 +1093,7 @@
       els.taskName.value = state.settings.last_task_name || "";
       updateTaskList();
       updateDisplay();
+      renderCharts();
     }
 
     els.soundButton.addEventListener("click", handleSoundButton);
@@ -823,13 +1107,13 @@
     });
 
     els.applyButton.addEventListener("click", applyMinutes);
-    els.chooseDataButton.addEventListener("click", chooseDataFile);
-    els.importDataButton.addEventListener("click", importSelectedData);
+    els.importDataButton.addEventListener("click", chooseDataFile);
     els.exportDataButton.addEventListener("click", exportData);
     els.dataFileInput.addEventListener("change", () => {
       selectedDataFile = els.dataFileInput.files[0] || null;
       if (selectedDataFile) {
-        els.dataFileLabel.textContent = `データ：${selectedDataFile.name}`;
+        els.dataFileLabel.textContent = `読み込み中：${selectedDataFile.name}`;
+        importSelectedData();
       }
     });
 
