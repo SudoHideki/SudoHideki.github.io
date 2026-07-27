@@ -417,6 +417,16 @@
         <h2 class="chart-title">作業名ごとの合計時間</h2>
         <div id="taskBarChart" class="bar-chart"></div>
       </div>
+
+      <div class="chart-card wide">
+        <h2 class="chart-title">当日の作業名ごとの作業時間</h2>
+        <div id="dailyTaskTimeChart" class="bar-chart"></div>
+      </div>
+
+      <div class="chart-card wide">
+        <h2 class="chart-title">当日の作業名ごとの作業回数</h2>
+        <div id="dailyTaskCountChart" class="bar-chart"></div>
+      </div>
     </section>
 
     <div id="dateTimeLabel" class="datetime"></div>
@@ -480,6 +490,8 @@
       taskPieChart: document.getElementById("taskPieChart"),
       taskPieLegend: document.getElementById("taskPieLegend"),
       taskBarChart: document.getElementById("taskBarChart"),
+      dailyTaskTimeChart: document.getElementById("dailyTaskTimeChart"),
+      dailyTaskCountChart: document.getElementById("dailyTaskCountChart"),
       dateTimeLabel: document.getElementById("dateTimeLabel"),
       statusLabel: document.getElementById("statusLabel")
     };
@@ -948,6 +960,7 @@
       renderDailyTimeChart();
       renderDailyCountChart();
       renderTaskCharts();
+      renderDailyTaskCharts();
     }
 
     function renderDailyTimeChart() {
@@ -996,6 +1009,49 @@
 
       renderBarChart(els.taskBarChart, rows, "分");
       renderPieChart(rows);
+    }
+
+    function renderDailyTaskCharts() {
+      const today = todayKey();
+      const totals = new Map();
+
+      for (const detail of state.details) {
+        const date = (detail.date || "").trim();
+        const taskName = (detail.task_name || "名称なし").trim() || "名称なし";
+        if (date !== today) continue;
+
+        const current = totals.get(taskName) || {
+          taskName,
+          workCount: 0,
+          totalSeconds: 0
+        };
+
+        current.workCount += 1;
+        current.totalSeconds += Number(detail.work_seconds || 0);
+        totals.set(taskName, current);
+      }
+
+      const rows = [...totals.values()]
+        .sort((a, b) => b.totalSeconds - a.totalSeconds)
+        .map((row) => {
+          const shortName = row.taskName.length > 12 ? `${row.taskName.slice(0, 11)}…` : row.taskName;
+          return {
+            label: shortName,
+            minutes: Math.round(row.totalSeconds / 60),
+            count: row.workCount
+          };
+        });
+
+      renderBarChart(
+        els.dailyTaskTimeChart,
+        rows.map((row) => ({ label: row.label, value: row.minutes })),
+        "分"
+      );
+      renderBarChart(
+        els.dailyTaskCountChart,
+        rows.map((row) => ({ label: row.label, value: row.count })),
+        "回"
+      );
     }
 
     function renderBarChart(container, rows, unit) {
